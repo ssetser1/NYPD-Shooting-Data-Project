@@ -1,0 +1,97 @@
+---
+title: "NYPD Shooting Data"
+output:
+  html_document: default
+  pdf_document: default
+date: "2024-06-23"
+---
+
+First we will library in what is needed for the project.
+
+```{r libraries}
+library(tidyverse)
+library(lubridate)
+```
+
+
+Then we will tart by reading in the NYPD Shooting Data.
+
+```{r get NYPD Data}
+url <- "https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD"
+```
+
+Next we will read the data to see what it contains
+
+```{r import_data, message = FALSE}
+NYPD_Data <- read_csv(url)
+NYPD_Data
+```
+
+Next we will tidy up the data by removing all the columns and categories that are not needed for our planned analysis, keeping only the date and boro. Furthermore we will add a column that tracks the total number of shootings per each boro.
+
+```{r tidy_NYPD_Shooting_Data}
+NYPD_Data <- NYPD_Data %>%
+  select(-c( JURISDICTION_CODE, X_COORD_CD, Y_COORD_CD, Latitude, Longitude, Lon_Lat,LOC_OF_OCCUR_DESC,LOC_CLASSFCTN_DESC, LOCATION_DESC, OCCUR_TIME, PRECINCT, STATISTICAL_MURDER_FLAG, VIC_AGE_GROUP, PERP_AGE_GROUP,PERP_RACE, VIC_RACE, VIC_SEX, PERP_SEX, INCIDENT_KEY)) %>%
+  mutate(OCCUR_DATE = mdy(OCCUR_DATE)) %>%
+  arrange(OCCUR_DATE) %>%
+  group_by(BORO) %>%
+  mutate(Shooting_Count = cumsum(!is.na(BORO))) %>%
+  ungroup()
+
+NYPD_Data
+summary(NYPD_Data)
+```
+
+
+We will create another data set that contains the total number of shootings for each individual boro
+
+```{r other_Stuff}
+boro_shootings <- NYPD_Data %>%
+  count(BORO)
+
+
+boro_shootings
+
+```
+
+
+We will now visualize the data with a bar plot that looks at and compares the total number of shootings per boro as well as a line plot that tracks the total number of shootings per boro over time.
+
+```{r visualizations}
+barplot <- barplot(c(boro_shootings$n), xlab = "BOROS", ylab=  "# of shootings")
+text(barplot, boro_shootings$n, labels = boro_shootings$BORO, pos = 3, xpd = TRUE)
+
+ggplot(NYPD_Data, aes(x = OCCUR_DATE, y = Shooting_Count, color = BORO)) +
+  geom_line() +
+  labs(x = "Date", y = "Number of Shootings", color = "Boro") +
+  ggtitle("Number of Shootings Over Time by Boro")
+
+
+```
+
+Based on these visualizations we can see the trend of which boros have historically had more total shootings as well as when some boros have experienced a spike in shootings. We can see that Brooklyn has currently has the most shootings as well as historically always having the most total shootings. One potential factor for this trend in the data could be the difference in population size between each boro which could be an interesting data point to consider in a future analysis.
+
+
+
+We will now continue by implementating a linear model on top of the brooklyn shooting data.
+
+
+```{r linear model}
+brooklyn_data <- NYPD_Data %>%
+  filter(BORO == "BROOKLYN") 
+  
+brooklyn_data
+
+linear_model <- lm(Shooting_Count ~ OCCUR_DATE, data = brooklyn_data)
+summary(linear_model)
+
+brooklyn_data$Fitted <- predict(linear_model)
+
+ggplot(brooklyn_data, aes(x = OCCUR_DATE)) +
+  geom_point(aes(y = Shooting_Count), color = 'blue') +
+  geom_line(aes(y = Fitted), color = 'red') +
+  labs(title = "Linear Model Fit of NYPD Shootings in Brooklyn", x = "Date", y = "Number of Shootings")
+
+```
+
+Based on this model we can see that historically the number of total shootings in Brooklyn some what follows a linear pattern. While there are points in which it which it veers off of a linear path this model is a step in the right direction of making more analyses on this data set. Also there are likely many more factors that come into play for the total number of NYPD shootings in Brooklyn that could be included in a future analysis. The potential sources of bias should also be acknowledged for this project. The method of data collection is a huge source of potential bias. Potentially not all shootings were reported or recorded which would skew and alter the data if included.
